@@ -34,6 +34,8 @@ MANIFEST
 # kiwano
 recipes/resnet/data/
 recipes/resnet/db/
+data/
+weights/
 
 # For macOS
 .DS_Store

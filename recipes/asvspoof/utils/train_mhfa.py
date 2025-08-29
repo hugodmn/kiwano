@@ -9,6 +9,7 @@ import sys
 import time
 from pathlib import Path
 from typing import List, Optional, Union
+from tqdm import tqdm 
 
 import hostlist
 import idr_torch
@@ -34,7 +35,7 @@ from kiwano.augmentation import (
     OneOf,
     Reverb,
     SpecAugment,
-    SpeedPerturbV3,
+    SpeedPerturb,
 )
 from kiwano.dataset import Segment, SegmentSet
 from kiwano.features import Fbank
@@ -76,6 +77,53 @@ def get_lr(optimizer):
         return param_group["lr"]
 
 
+def model_eval(
+    model,
+    criterion,
+    epoch : int,
+    eval_loader : DataLoader,
+    device : torch.device
+                ) -> float:
+    
+    model.eval()
+    iterator = iter(eval_loader)
+
+    total_loss = torch.tensor(0.0).to(device)
+    total_batch_count = torch.tensor(0.0).to(device)
+
+    with torch.no_grad():
+        for feat, key in iterator:
+            # feat = feat.unsqueeze(1)
+            key = key.to(device)
+            feat = feat.float().to(device)
+
+            logits = model(feat)
+
+            loss = criterion(logits, key)
+            total_loss += loss.detach().cpu()
+            total_batch_count += 1
+    
+    if torch.distributed.is_initialized():
+        torch.distributed.all_reduce(total_loss, op=torch.distributed.ReduceOp.SUM)
+        torch.distributed.all_reduce(total_count, op=torch.distributed.ReduceOp.SUM)
+
+    rmean_loss = (total_loss / total_batch_count).item()
+    del loss_list
+
+    msg = "{}: Epoch: [{}/{}] \t AvgLoss:{:.4f} \t LR : {:.8f} \t Margin : {:.4f}".format(
+                    time.ctime(),
+                    epochs,
+                    100,
+                    rmean_loss,
+                    get_lr(optimizer),
+                    resnet_model.module.get_m(),
+                )
+    print(msg)
+    model.train()
+
+    return rmean_loss
+
+
 class SpeakerTrainingSegmentSet(Dataset, SegmentSet):
     def __init__(self, audio_transforms: List[Augmentation] = None):
         super().__init__()
@@ -109,17 +157,25 @@ class SpeakerTrainingSegmentSet(Dataset, SegmentSet):
 
         return result, self.labels[segment.spkid]
 
+ 
+
 
 if __name__ == "__main__":
 
-    hostnames = hostlist.expand_hostlist(os.environ["SLURM_JOB_NODELIST"])
-    os.environ["MASTER_ADDR"] = hostnames[0]
-    os.environ["MASTER_PORT"] = "29500"
-    rank = int(os.environ["SLURM_NODEID"])
-    world = int(os.environ["SLURM_JOB_NUM_NODES"])
-    master_addr = hostnames[0]
-    port = int(os.environ["MASTER_PORT"])
-    checkpoint = None
+    # hostnames = hostlist.expand_hostlist(os.environ["SLURM_JOB_NODELIST"])
+    # os.environ["MASTER_ADDR"] = hostnames[0]
+    # os.environ["MASTER_PORT"] = "29500"
+    # rank = int(os.environ["SLURM_NODEID"])
+    # world = int(os.environ["SLURM_JOB_NUM_NODES"])
+    # master_addr = hostnames[0]
+    # port = int(os.environ["MASTER_PORT"])
+    # checkpoint = None
+
+
+    master_addr = 'localhost'
+    rank = 0
+    world = 1
+
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--local_rank", type=int)
@@ -131,6 +187,7 @@ if __name__ == "__main__":
     parser.add_argument("--step_size", type=float, default=3)
     parser.add_argument("--weight_decay", type=float, default=0.001)
     parser.add_argument("--plateau", type=int, default=3)
+    parser.add_argument("--eval_corpus", type=str, metavar="evaluation_corpus", default=None)
     parser.add_argument("training_corpus", type=str, metavar="training_corpus")
     parser.add_argument("exp_dir", type=str, metavar="exp_dir")
 
@@ -202,14 +259,39 @@ if __name__ == "__main__":
         batch_size=64,
         drop_last=True,
         shuffle=False,
-        num_workers=8,
+        num_workers=1,
         sampler=train_sampler,
         pin_memory=False,
     )
+
+    best_loss = 100000
+    if args.eval_corpus is not None : 
+        eval_data = SpeakerTrainingSegmentSet()
+        eval_data.from_dict(Path(args.eval_corpus))
+        eval_data.truncate(min_duration=2.2, max_duration=200.0)
+        eval_data.describe()
+        eval_sampler = DistributedSampler(
+                            eval_data,
+                            num_replicas=dist.get_world_size(),
+                            rank=dist.get_rank(),
+                            shuffle=True,
+                             )
+
+        eval_dataloader = DataLoader(
+                            eval_data,
+                            batch_size=64,
+                            drop_last=True,
+                            shuffle=False,
+                            num_workers=1,
+                            sampler=eval_sampler,
+                            pin_memory=False,
+                                    )
+
+
     iterator = iter(train_dataloader)
 
     # resnet_model = MHFA("cache/models--microsoft--wavlm-base-plus/snapshots/4c66d4806a428f2e922ccfa1a962776e232d487b/")
-    resnet_model = MHFALarge("WavLM-Large.pt")
+    resnet_model = MHFALarge("weights/WavLM-Large.pt")
     # if args.checkpoint:
     #    resnet_model.load_state_dict(  checkpoint["model"]  )
     resnet_model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(resnet_model)
@@ -230,9 +312,16 @@ if __name__ == "__main__":
 
     running_loss = [np.nan for _ in range(500)]
 
+
     for epochs in range(epochs_start, 100):
         iterations = 0
         train_sampler.set_epoch(epochs)
+        if args.eval_corpus :
+            eval_sampler.set_epoch(epochs)
+
+        is_main = (not dist.is_initialized()) or (dist.get_rank() == 0)
+        pbar = tqdm(total=len(train_dataloader), disable=not is_main, desc=f"Epoch {epochs}", leave=False)
+
         torch.distributed.barrier()
         for feats, iden in train_dataloader:
 
@@ -251,6 +340,9 @@ if __name__ == "__main__":
             running_loss.pop(0)
             running_loss.append(loss.item())
             rmean_loss = np.nanmean(np.array(running_loss))
+            
+            if is_main :
+                pbar.update(1)
 
             if iterations % 100 == 0:
                 matches = (torch.argmax(preds, dim=1) == iden).sum()
@@ -273,11 +365,32 @@ if __name__ == "__main__":
             iterations += 1
 
         if dist.get_rank() == 0:
-            checkpoint = {
+            if args.eval_corpus is not None : 
+                eval_loss = model_eval(
+                    model=model,
+                    criterion=criterion,
+                    epoch=epochs,
+                    eval_loader=eval_dataloader,
+                    device=device
+                )
+                if eval_loss < best_loss : 
+                    best_loss = eval_loss
+                    checkpoint = {
+                    "epochs": epochs + 1,
+                    "optimizer": optimizer.state_dict(),
+                    "model": resnet_model.module.state_dict(),
+                    "name": type(resnet_model.module).__name__,
+                    "config": resnet_model.extra_repr(),
+                    }
+                    torch.save(checkpoint, args.exp_dir + "/model" + str(epochs) + ".ckpt")
+            else : 
+
+                checkpoint = {
                 "epochs": epochs + 1,
                 "optimizer": optimizer.state_dict(),
                 "model": resnet_model.module.state_dict(),
                 "name": type(resnet_model.module).__name__,
                 "config": resnet_model.extra_repr(),
-            }
-            torch.save(checkpoint, args.exp_dir + "/model" + str(epochs) + ".ckpt")
+                }
+                torch.save(checkpoint, args.exp_dir + "/model" + str(epochs) + ".ckpt")
+

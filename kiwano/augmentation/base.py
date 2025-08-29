@@ -794,8 +794,8 @@ class Codec16kHzWithEffector(Augmentation):
                 {"format": "wav", "encoding": "ALAW", "bits_per_sample": 8},
                 "8-bit a-law",
             ),
-            ({"format": "mp3", "compression": None}, "MP3"),
-            ({"format": "vorbis", "compression": None}, "Vorbis"),
+            # ({"format": "mp3", "compression": None}, "MP3"),
+            # ({"format": "ogg", "compression": None}, "Vorbis"),
             ({"format": "flac", "compression": 5}, "FLAC"),
             # ({"format": "opus", "compression": None}, "Opus"),
             # ({"format": "aac", "audio_bitrate": None}, "AAC"),
@@ -805,11 +805,15 @@ class Codec16kHzWithEffector(Augmentation):
     def __call__(self, tensor: torch.Tensor, sample_rate: int = 16000):
         param, title = random.choice(self.codec)
 
-        if title == "MP3":
-            param["compression"] = random.uniform(*self.mp3_compression_range)
-        elif title == "Vorbis":
-            param["compression"] = random.uniform(*self.vorbis_compression_range)
-        elif title == "Opus":
+        # if title == "MP3":
+        #     param["compression"] = random.uniform(*self.mp3_compression_range)
+
+        # if title == "Vorbis":
+        #     for k in ("encoding", "bits_per_sample", "audio_bitrate"):
+        #         param.pop(k, None)
+        #     param["format"] = "ogg"
+        #     param["compression"] = random.uniform(*self.vorbis_compression_range)
+        if title == "Opus":
             param["compression"] = random.uniform(*self.opus_compression_range)
         elif title == "AAC":
             param["audio_bitrate"] = (

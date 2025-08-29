@@ -88,4 +88,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    prepare_asvspoof5(Path(args.in_data), Path(args.out_data), 30)
+    prepare_asvspoof5(Path(args.in_data), Path(args.out_data), 20)
