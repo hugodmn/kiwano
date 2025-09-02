@@ -29,7 +29,6 @@ from kiwano.dataset import Segment, SegmentSet
 from kiwano.embedding import EmbeddingSet, write_pkl
 from kiwano.features import Fbank
 from kiwano.model import (  # ResNetASVSpoof, ResNetShakeShakeASVSpoof, MHFA, MHFA_HF, MHFALarge
-    Conformer,
     MHFALarge,
 )
 from kiwano.utils import Pathlike
@@ -121,7 +120,7 @@ if __name__ == "__main__":
     )
     iterator = iter(extracting_dataloader)
 
-    resnet_model = MHFALarge("WavLM-Large.pt")
+    resnet_model = MHFALarge("weights/WavLM-Large.pt")
 
     resnet_model.load_state_dict(torch.load(args.model)["model"])
     resnet_model.to(device)

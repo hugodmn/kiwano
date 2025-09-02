@@ -36,6 +36,7 @@ recipes/resnet/data/
 recipes/resnet/db/
 data/
 weights/
+exps/
 
 # For macOS
 .DS_Store

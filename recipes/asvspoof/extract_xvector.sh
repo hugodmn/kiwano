@@ -12,32 +12,32 @@
 
 #module load pytorch-gpu/py3/1.7.1+nccl-2.8.3-1
 
-export OMP_NUM_THREADS=10
+# export OMP_NUM_THREADS=10
 
-module purge
-module load pytorch-gpu/py3/2.2.0
+# module purge
+# module load pytorch-gpu/py3/2.2.0
 
-dir=$1
+# dir=$1
 
-mkdir -p ${dir}/asvspoof.${2}/
-mkdir -p ${dir}/cfad_noisy.${2}/
-mkdir -p ${dir}/cfad_codec.${2}/
-mkdir -p ${dir}/latin_american.${2}/
-mkdir -p ${dir}/itw.${2}/
+# mkdir -p ${dir}/asvspoof.${2}/
+# mkdir -p ${dir}/cfad_noisy.${2}/
+# mkdir -p ${dir}/cfad_codec.${2}/
+# mkdir -p ${dir}/latin_american.${2}/
+# mkdir -p ${dir}/itw.${2}/
 #mkdir -p ${dir}/defi.${2}/
 #mkdir -p ${dir}/defi_taskb.${2}/
 
 
 
-python3 utils/extract_mhfa.py --world_size=$SLURM_ARRAY_TASK_COUNT  --rank=$SLURM_ARRAY_TASK_ID data/latin_american/ ${dir}/model${2}.ckpt pkl:${dir}/latin_american.${2}/xvector.$SLURM_ARRAY_TASK_ID.pkl
+# python3 utils/extract_mhfa.py --world_size=$SLURM_ARRAY_TASK_COUNT  --rank=$SLURM_ARRAY_TASK_ID data/latin_american/ ${dir}/model${2}.ckpt pkl:${dir}/latin_american.${2}/xvector.$SLURM_ARRAY_TASK_ID.pkl
 
-python3 utils/extract_mhfa.py --world_size=$SLURM_ARRAY_TASK_COUNT  --rank=$SLURM_ARRAY_TASK_ID data/ASVSpoof5_dev/ ${dir}/model${2}.ckpt pkl:${dir}/asvspoof.${2}/xvector.$SLURM_ARRAY_TASK_ID.pkl
+python3 recipes/asvspoof/utils/extract_mhfa.py /media/ssd_2/hdaumain/antispoofing/corpus/asvspoof2024/processed/eval/ /media/ssd_2/hdaumain/antispoofing/kiwano/exps/second_training_WavLM+MHFA/${1}.ckpt pkl:/media/ssd_2/hdaumain/antispoofing/corpus/asvspoof2024/processed/eval/xvectors/xvector.${1}.pkl
 
-python3 utils/extract_mhfa.py --world_size=$SLURM_ARRAY_TASK_COUNT  --rank=$SLURM_ARRAY_TASK_ID data/cfad_noisy_version/ ${dir}/model${2}.ckpt pkl:${dir}/cfad_noisy.${2}/xvector.$SLURM_ARRAY_TASK_ID.pkl
+# python3 utils/extract_mhfa.py --world_size=$SLURM_ARRAY_TASK_COUNT  --rank=$SLURM_ARRAY_TASK_ID data/cfad_noisy_version/ ${dir}/model${2}.ckpt pkl:${dir}/cfad_noisy.${2}/xvector.$SLURM_ARRAY_TASK_ID.pkl
 
-python3 utils/extract_mhfa.py --world_size=$SLURM_ARRAY_TASK_COUNT  --rank=$SLURM_ARRAY_TASK_ID data/cfad_codec_version/ ${dir}/model${2}.ckpt pkl:${dir}/cfad_codec.${2}/xvector.$SLURM_ARRAY_TASK_ID.pkl
+# python3 utils/extract_mhfa.py --world_size=$SLURM_ARRAY_TASK_COUNT  --rank=$SLURM_ARRAY_TASK_ID data/cfad_codec_version/ ${dir}/model${2}.ckpt pkl:${dir}/cfad_codec.${2}/xvector.$SLURM_ARRAY_TASK_ID.pkl
 
-python3 utils/extract_mhfa.py --world_size=$SLURM_ARRAY_TASK_COUNT  --rank=$SLURM_ARRAY_TASK_ID data/itw/ ${dir}/model${2}.ckpt pkl:${dir}/itw.${2}/xvector.$SLURM_ARRAY_TASK_ID.pkl
+# python3 utils/extract_mhfa.py --world_size=$SLURM_ARRAY_TASK_COUNT  --rank=$SLURM_ARRAY_TASK_ID data/itw/ ${dir}/model${2}.ckpt pkl:${dir}/itw.${2}/xvector.$SLURM_ARRAY_TASK_ID.pkl
 
 #python3 utils/extract_mhfa.py --world_size=$SLURM_ARRAY_TASK_COUNT  --rank=$SLURM_ARRAY_TASK_ID data/defi/ ${dir}/model${2}.ckpt pkl:${dir}/defi.${2}/xvector.$SLURM_ARRAY_TASK_ID.pkl
 
