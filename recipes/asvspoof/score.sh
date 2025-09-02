@@ -1,7 +1,6 @@
 
 echo "ASVSpoof5"
-t=/media/ssd_2/hdaumain/antispoofing/corpus/asvspoof2024
-# python utils/embedding_copy.py "pkl:cat $t/xvectors/*.pkl |" pkl,t:- | cut -f1,2 -d" " | awk '{print $1" "$1" "$2}' | sort  > $t/score.txt
+python utils/embedding_copy.py "pkl:cat $1/asvspoof2024/xvectors/*.pkl |" pkl,t:- | cut -f1,2 -d" " | awk '{print $1" "$1" "$2}' | sort  > $t/score.txt
 awk '{ print $2, $2, ($9 == "bonafide" ? 1 : 0) }' $t/raw/eval/ASVspoof5.eval.metadata.txt > $t/processed/eval/trials.sort.v2
 python utils/compute_eer.py $t/processed/eval/trials.sort.v2 $t/processed/eval/score.txt
 python utils/compute_dcf.py --c-fa=10 --c-miss=1 --p-target=0.05 $t/processed/eval/trials.sort.v2 $t/processed/eval/score.txt
